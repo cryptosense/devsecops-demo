@@ -23,6 +23,10 @@ subprojects {
         mavenLocal()
     }
 
+    if (project.hasProperty('with-cryptosense')) {
+       test.jvmArgs = ['-javaagent:../cryptosense/java/cs-java-tracer.jar']
+    }
+
     ext {
         // All dependency versions.
         autoValueVersion = '1.9'

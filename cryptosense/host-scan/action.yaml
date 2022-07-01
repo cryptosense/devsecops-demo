@@ -1,0 +1,23 @@
+name: 'Cryptosense Host scanner Github Action'
+description: 'Run the Host scanner on a docker image and get a scan for keys and certificates'
+inputs:
+  image_name:
+    description: 'Name of the Docker image to scan'
+    required: true
+  cs_api_key:
+    description: 'Cryptosense API key'
+    required: true
+  project_id:
+    description: 'Project ID'
+    required: true
+  trace_name:
+    description: 'Trace name'
+    required: true
+runs:
+  using: 'docker'
+  image: 'ghcr.io/cryptosense/host-scanner:latest'
+  args:
+    - ${{inputs.image_name}}
+    - ${{inputs.cs_api_key}}
+    - ${{inputs.project_id}}
+    - ${{inputs.trace_name}}

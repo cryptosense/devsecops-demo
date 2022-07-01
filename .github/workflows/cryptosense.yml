@@ -1,0 +1,78 @@
+name: cryptosense
+on: [push, workflow_dispatch]
+
+env:
+  CS_ROOT_URL: https://analyzer.cryptosense.com
+  CS_PROJECT_ID: 2406
+  CS_PROFILE_ID: 5497
+
+jobs:
+  java_analysis:
+    name: Java analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+      - uses: actions/setup-java@v1
+        with:
+          java-version: 11
+      - name: Cache Gradle resources
+        uses: actions/cache@v2
+        with:
+          path: ~/.gradle/caches
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle') }}
+          restore-keys: ${{ runner.os }}-gradle
+      - name: Run tests with the Cryptosense Java Tracer attached
+        run: ./gradlew cleanTest test -Pwith-cryptosense
+      - name: Cryptosense Results
+        run: ./cryptosense/java/ci.bash
+        env:
+          CS_API_KEY: ${{ secrets.cryptosense_api_key }}
+  container_analysis:
+    name: Container analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: cryptosense
+          password: ${{ secrets.registry_pat }}
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/cryptosense/tsunami-app
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Generate scan name
+        id: scan_name
+        run: |
+          time=$(date +"%H:%M:%S")
+          echo "::set-output name=scan-name::scan_${GITHUB_RUN_ID}_${time}.cst.gz"
+      - name: Download container image 
+        run: docker pull ghcr.io/cryptosense/tsunami-app
+      - name: Download Cryptosense Host Scanner
+        run: docker pull ghcr.io/cryptosense/host-scanner
+      - name: Scan the container image
+        uses: ./cryptosense/host-scan
+        with:
+          image_name: ghcr.io/cryptosense/tsunami-app
+          cs_api_key: ${{ secrets.cryptosense_api_key }}
+          project_id: ${{ env.CS_PROJECT_ID }}
+          trace_name: ${{ steps.scan_name.outputs.scan-name }}
+      - name: Cryptosense Results
+        run: python cryptosense/generate_report.py ${{ steps.scan_name.outputs.scan-name }}
+        env:
+          CS_API_KEY: ${{ secrets.cryptosense_api_key }}
